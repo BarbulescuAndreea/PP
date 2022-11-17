@@ -1,0 +1,204 @@
+#lang racket
+
+(provide (all-defined-out))
+
+;; Un triplet pitagoreic primitiv (TPP) este format din 
+;; 3 numere naturale nenule a, b, c cu proprietățile:
+;;    a^2 + b^2 = c^2
+;;    a, b, c prime între ele
+;;
+;; TPP pot fi generate sub formă de arbore (infinit) cu
+;; rădăcina (3,4,5), pe baza a 3 transformări matriciale:
+;;
+;;      |-1 2 2|        |1 2 2|        |1 -2 2|
+;; T1 = |-2 1 2|   T2 = |2 1 2|   T3 = |2 -1 2|
+;;      |-2 2 3|        |2 2 3|        |2 -2 3|
+;;
+;;                         (3,4,5)
+;;              _____|_____
+;;             |              |              |
+;;         (15,8,17)      (21,20,29)     (5,12,13)
+;;       __|__  __|__  __|__
+;;      |      |      ||      |      ||      |      |
+;; (35,12,37) ..........................................
+;;
+;; unde:
+;; (15, 8,17) = T1·(3,4,5)
+;; (21,20,29) = T2·(3,4,5)
+;; ( 5,12,13) = T3·(3,4,5) etc.
+;;
+;; În această reprezentare, TPP sunt indexate "de sus în jos",
+;; respectiv "de la stânga la dreapta", rezultând ordinea:
+;; (3,4,5) (15,8,17) (21,20,29) (5,12,13) (35,12,37) ... etc.
+
+;; Reprezentăm matricile T1, T2, T3 ca liste de liste:
+(define T1 '((-1 2 2) (-2 1 2) (-2 2 3)))
+(define T2 '( (1 2 2)  (2 1 2)  (2 2 3)))
+(define T3 '((1 -2 2) (2 -1 2) (2 -2 3)))
+
+; TODO
+; Implementați o funcție care calculează produsul scalar
+; a doi vectori X și Y (reprezentați ca liste).
+; Se garantează că X și Y au aceeași lungime.
+; Ex: (-1,2,2)·(3,4,5) = -3 + 8 + 10 = 15
+; Utilizați recursivitate pe stivă.
+(define (dot-product X Y)
+  (if (empty? X)
+      0
+      (+ (* (car X) (car Y)) (dot-product (cdr X) (cdr Y))))) ; recursivitate pe stiva
+
+; TODO
+; Implementați o funcție care calculează produsul dintre
+; o matrice M și un vector V (puneți V "pe verticală").
+; Se garantează că M și V au dimensiuni compatibile.
+; Ex: |-1 2 2| |3|   |15|
+;     |-2 1 2|·|4| = | 8|
+;     |-2 2 3| |5|   |17|
+; Utilizați recursivitate pe coadă.
+
+(define (multiply-recursion M V acc)
+  (if (empty? M)
+      (rev acc)
+       (multiply-recursion (cdr M) V (cons (dot-product (car M) V) acc))))
+
+(define (multiply M V)
+      (multiply-recursion M V empty)) ; folosire functie ajutatoare cu acumulator pt recursivitatea pe coada
+
+; TODO
+; Implementați o funcție care primește un număr n și
+; întoarce o listă numerică (unde elementele au valoarea
+; 1, 2 sau 3), reprezentând secvența de transformări prin
+; care se obține, plecând de la (3,4,5), al n-lea TPP
+; din arbore.
+; Ex: (get-transformations 8) întoarce '(2 1), adică
+; al 8-lea TPP din arbore se obține din T1·T2·(3,4,5).
+; Sunteți încurajați să folosiți funcții ajutătoare
+; (de exemplu pentru determinarea nivelului din arbore 
+; pe care se află n, sau a indexului minim/maxim de pe 
+; nivelul respectiv, etc.)
+
+(define (level-for-index-with-depth n depth max-for-depth)
+  (if (> max-for-depth n)
+      (+ depth 1)
+      (level-for-index-with-depth n (+ depth 1) (+ max-for-depth (expt 3 (+ depth 1))))))
+
+(define (level-for-index n) ; nivelul indexului n in arbore
+  (level-for-index-with-depth n 1 1))
+
+(define (T-number-for-interval n min-index max-index) ; functie ajutatoare care calculeaza in ce subinterval se afla n
+    (if (<= n (+ min-index (quotient (- max-index min-index) 3)))
+        1
+        (if (<= n (+ min-index (quotient (* 2 (- max-index min-index)) 3)))
+            2
+            3)))
+
+
+(define (interval-for-T-number TNum min-index max-index)
+    (list (+ (+ min-index (quotient (* (- TNum 1) (- max-index min-index)) 3)) (if (= TNum 1) 0 1)) (+ min-index (quotient (* TNum (- max-index min-index)) 3))))
+             
+(define (road-for-index n min-index max-index acc)
+    (if (>= min-index max-index)
+    acc
+    (append
+     (append (list (T-number-for-interval n min-index max-index)) acc)
+     (road-for-index
+      n
+      (car (interval-for-T-number (T-number-for-interval n min-index max-index) min-index max-index))
+      (cadr (interval-for-T-number (T-number-for-interval n min-index max-index) min-index max-index))
+      acc))))
+
+(define (max-index-level n) ; indexul maxim de pe nivelul respectiv
+  (if (= n 1)
+      1
+      (+ (expt 3 (- n 1)) (max-index-level (- n 1)))))
+
+(define (min-index-level n) ; indexul minim de pe nivelul respectiv 
+  ( + (max-index-level (- n 1)) 1))
+
+(define (pairs-on-level n) ; numarul de perechi pe nivel
+  (expt 3 (- n 1)))
+
+; n = indexul elementului cautat
+
+(define (get-transformations n)
+  (if (<= n 4)
+      (if (= n 1)
+          '()
+          (list (- n 1)))
+      (road-for-index n (min-index-level (level-for-index n)) (max-index-level (level-for-index n)) empty)))
+
+
+
+
+
+
+(define (matrix-product M1 M2)
+  (let ((cols (make-transpose M2))) (map (λ (row) (multiply cols row)) M1)))
+    ; multiplica liniile din M1 cu col coresp din M2 pt toata matricea M1
+
+          
+; TODO
+; Implementați o funcție care primește o listă Ts de 
+; tipul celei întoarsă de get-transformations, respectiv 
+; un triplet de start ppt și întoarce tripletul rezultat
+; în urma aplicării transformărilor din Ts asupra ppt.
+; Utilizați recursivitate pe coadă.
+
+;functie recursiva pe coada - inversarea unei liste
+(define (rev-helper L acc)
+  (if (null? L)
+      acc
+      (rev-helper (cdr L) (cons (car L) acc))))
+
+(define (rev L)
+  (rev-helper L empty))
+
+; functie recursiva pe coada
+(define (create-list-helper Ts acc) ; am facut o lista formata din matricile T1, T2, T3
+  (cond
+    ((empty? Ts) acc)
+    ((equal? (car Ts) 1)  (create-list-helper (cdr Ts) (append acc (list T1))))
+    ((equal? (car Ts) 2) (create-list-helper (cdr Ts) (append acc (list T2))))
+    (else (create-list-helper (cdr Ts) (append acc (list T3))))))
+
+(define (create-list Ts)
+  (create-list-helper Ts empty))
+
+; functie recursiva pe coada - transpusa unei matrici
+(define (transpose matrixs acc)
+  (if (or (null? matrixs) (null? (car matrixs)))
+      (rev acc)
+      (transpose (map cdr matrixs) ( cons (map car matrixs) acc))))
+
+(define (transpose-final matrixs)
+  (transpose matrixs '()))          
+
+(define (make-transpose M1)
+  (transpose-final M1))
+
+
+;functie recursiva pe coada
+(define (multy-list-with-matrix-helper MatrixList acc) ; functie care inmulteste toate matricile din lista de indici
+  ; ex : '(1 2 3 1) => T1* T2* T3* T1
+      (if (empty? MatrixList)
+          acc
+          (multy-list-with-matrix-helper (cdr MatrixList) (matrix-product acc (car MatrixList))
+                                         )))
+(define (multy-list-with-matrix MatrixList)
+  (multy-list-with-matrix-helper MatrixList '((1 0 0) (0 1 0) (0 0 1)))
+  )
+
+(define (multy-list Ts) ; functie care aplica inmultiri intre matricile din lista initiala data, de la final la inceput
+  (multy-list-with-matrix (rev(create-list Ts))))
+  
+(define (apply-matrix-transformations Ts ppt)
+    (multiply (multy-list Ts) ppt))
+  
+
+; TODO
+; Implementați o funcție care calculează al n-lea TPP
+; din arbore, folosind funcțiile anterioare.
+(define (get-nth-ppt-from-matrix-transformations n)
+  (if (= n 1)
+      '(3 4 5)
+      (apply-matrix-transformations (get-transformations n) '(3 4 5))))
